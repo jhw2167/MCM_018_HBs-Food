@@ -72,11 +72,11 @@ public class FoodBenefitsConfig {
     public static class FoodEffects {
 
         @NestedType(String.class)
-        @Comment("Potion effects applied when eating a food from group 1. Format: effect_id[,amplifier] e.g. minecraft:strength,0")
+        @Comment("Potion effects applied when eating a food from group 1. e.g. minecraft:strength,0")
         public Set<String> foodGroup1Effects = new HashSet<>(Set.of("minecraft:strength"));
 
         @NestedType(String.class)
-        @Comment("Potion effects applied when eating a food from group 2. Format: effect_id[,amplifier]")
+        @Comment("Potion effects applied when eating a food from group 2. e.g. minecraft:haste,0")
         public Set<String> foodGroup2Effects = new HashSet<>(Set.of("minecraft:haste"));
 
         @NestedType(String.class)
@@ -100,6 +100,12 @@ public class FoodBenefitsConfig {
 
         @Comment("Seconds of bonus effect duration granted for each hunger point the food replenishes")
         public int bonusEffectDurationPerFoodPoint = 5;
+
+        @Comment("Each active food bonus effect adds one level of Healthy. At this Healthy level or above, minHealthyBonusEffect is also applied")
+        public int minHealthyEffectLevelForBonusEffect = 3;
+
+        @Comment("Effect applied while Healthy is at or above minHealthyEffectLevelForBonusEffect. Format: effect_id[,amplifier]")
+        public String minHealthyBonusEffect = "minecraft:resistance";
 
         @NestedType(String.class)
         @Comment("Food items which are eaten faster than normal")
@@ -128,9 +134,33 @@ public class FoodBenefitsConfig {
 
         @Comment("Eating speed multiplier for slow foods, must be between 0 and 1. A value of 0.5 eats half as fast")
         public float slowFoodSpeedBonus = 0.5f;
+
+        @NestedType(String.class)
+        @Comment("Food items whose bonus effect durations are multiplied by lingeringFoodBonusMultiplier")
+        public Set<String> lingeringFoods = new HashSet<>(Set.of(
+            "minecraft:golden_carrot",
+            "minecraft:rabbit_stew",
+            "minecraft:pumpkin_pie"
+        ));
+
+        @Comment("Bonus effect duration multiplier for lingering foods, must be greater than 1")
+        public float lingeringFoodBonusMultiplier = 2.0f;
+
+        @NestedType(String.class)
+        @Comment("Food items which grant their bonus effects at a higher level, increased by robustFoodEffectLevelIncrease")
+        public Set<String> robustFoods = new HashSet<>(Set.of(
+            "minecraft:golden_carrot",
+            "minecraft:rabbit_stew"
+        ));
+
+        @Comment("Additional levels added to bonus effects granted by robust foods, must be at least 1")
+        public int robustFoodEffectLevelIncrease = 1;
     }
 
     public static class FoodHealthInteractions {
+
+        @Comment("If true, vanilla passive health regen from a full hunger bar is limited to a regen budget earned by eating foods")
+        public boolean enableFoodRegenCap = true;
 
         @Comment("Minimum hunger points a food must replenish to give the player passive health regen")
         public int minHungerPointsEligibleForHeal = 4;
@@ -140,12 +170,7 @@ public class FoodBenefitsConfig {
     }
 
     public static class FoodSaturationInteraction {
-
-        @NestedType(String.class)
-        @Comment("Potion effects applied based on the saturation a food provides. Format: effect_id[,amplifier]")
-        public Set<String> playerSaturatedBonusEffect = new HashSet<>(Set.of("minecraft:resistance"));
-
-        @Comment("Seconds of saturation bonus effect duration granted for each saturation point the food provides")
+        @Comment("Seconds a previous food's bonus effect is re-granted for, per saturation point the new food provides")
         public int bonusEffectDurationPerSaturationPoint = 5;
     }
 

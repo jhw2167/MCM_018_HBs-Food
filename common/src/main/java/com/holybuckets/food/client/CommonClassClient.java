@@ -12,6 +12,7 @@ public class CommonClassClient {
     public static void initClient() {
         ClientEventRegistrar registrar = ClientEventRegistrar.getInstance();
         ClientBalmEventRegister.registerEvents();
+        HealthyEffectClient.init(registrar);
         ModRenderers.clientInitialize(BalmClient.getRenderers());
         ModScreens.clientInitialize(BalmClient.getScreens());
         //ModItems.clientInitialize();

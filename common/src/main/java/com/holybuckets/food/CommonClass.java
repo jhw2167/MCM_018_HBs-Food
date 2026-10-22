@@ -3,6 +3,7 @@ package com.holybuckets.food;
 import com.holybuckets.foundation.event.BalmEventRegister;
 import com.holybuckets.food.block.ModBlocks;
 import com.holybuckets.food.config.FoodBenefitsConfig;
+import com.holybuckets.food.effect.ModEffects;
 import com.holybuckets.food.block.be.ModBlockEntities;
 import com.holybuckets.food.item.ModItems;
 import com.holybuckets.food.menu.ModMenus;
@@ -39,6 +40,7 @@ public class CommonClass {
         ModBlockEntities.initialize(Balm.getBlockEntities());
         ModItems.initialize(Balm.getItems());
         ModMenus.initialize(Balm.getMenus());
+        ModEffects.register();
         
         isInitialized = true;
     }
