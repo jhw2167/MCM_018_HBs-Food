@@ -2,6 +2,7 @@ package com.holybuckets.food;
 
 import com.holybuckets.foundation.event.BalmEventRegister;
 import com.holybuckets.food.block.ModBlocks;
+import com.holybuckets.food.config.FoodBenefitsConfig;
 import com.holybuckets.food.block.be.ModBlockEntities;
 import com.holybuckets.food.item.ModItems;
 import com.holybuckets.food.menu.ModMenus;
@@ -30,7 +31,7 @@ public class CommonClass {
         }
 
         //RegisterConfigs
-        //Balm.getConfig().registerConfig(ChallengeTempleConfig.class);
+        Balm.getConfig().registerConfig(FoodBenefitsConfig.class);
         FoodWithBenefitsMain.INSTANCE = new FoodWithBenefitsMain();
         BalmEventRegister.registerEvents();
         BalmEventRegister.registerCommands();

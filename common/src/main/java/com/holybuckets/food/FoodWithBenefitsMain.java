@@ -2,7 +2,9 @@ package com.holybuckets.food;
 
 
 import com.holybuckets.foundation.event.EventRegistrar;
-import com.holybuckets.food.config.TemplateConfig;
+import com.holybuckets.food.config.FoodBenefitsConfig;
+import com.holybuckets.food.config.ModConfig;
+import com.holybuckets.food.core.DietManager;
 import net.blay09.mods.balm.api.Balm;
 import net.blay09.mods.balm.api.event.EventPriority;
 import net.blay09.mods.balm.api.event.server.ServerStartingEvent;
@@ -13,7 +15,7 @@ import net.blay09.mods.balm.api.event.server.ServerStartingEvent;
  */
 public class FoodWithBenefitsMain {
     private static boolean DEV_MODE = false;;
-    private static TemplateConfig CONFIG;
+    public static FoodBenefitsConfig CONFIG;
     public static FoodWithBenefitsMain INSTANCE;
 
     public FoodWithBenefitsMain()
@@ -37,7 +39,8 @@ public class FoodWithBenefitsMain {
 
         //Events
         EventRegistrar registrar = EventRegistrar.getInstance();
-        //ChallengeBlockBehavior.init(registrar);
+        ModConfig.init(registrar);
+        DietManager.init(registrar);
 
 
         //register local events
@@ -46,7 +49,7 @@ public class FoodWithBenefitsMain {
     }
 
     private void onServerStarting(ServerStartingEvent e) {
-        CONFIG = Balm.getConfig().getActiveConfig(TemplateConfig.class);
+        CONFIG = Balm.getConfig().getActiveConfig(FoodBenefitsConfig.class);
         //this.DEV_MODE = CONFIG.devMode;
         this.DEV_MODE = false;
     }
