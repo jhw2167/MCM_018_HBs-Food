@@ -3,6 +3,7 @@ package com.holybuckets.food.core;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.holybuckets.food.client.HealthyEffectClient;
+import com.holybuckets.food.config.BonusEffect;
 import com.holybuckets.food.config.ModConfig;
 import com.holybuckets.food.effect.ModEffects;
 import com.holybuckets.foundation.HBUtil;
@@ -12,7 +13,6 @@ import com.holybuckets.foundation.event.custom.ServerTickEvent;
 import com.holybuckets.foundation.event.custom.TickType;
 import net.blay09.mods.balm.api.Balm;
 import net.blay09.mods.balm.api.event.LivingDeathEvent;
-import net.blay09.mods.balm.api.event.PlayerLogoutEvent;
 import net.blay09.mods.balm.api.event.UseItemEvent;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ServerPlayer;
@@ -23,13 +23,7 @@ import net.minecraft.world.food.FoodProperties;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
-import javax.annotation.Nullable;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class DietManager {
@@ -40,12 +34,15 @@ public class DietManager {
     private static final Map<String, DietStats> DIET_STATS = new ConcurrentHashMap<>();
     private static final Map<String, Map<MobEffect, Integer>> GRANTED_EFFECTS = new ConcurrentHashMap<>();
 
+    private static ModConfig CONFIG;
+
     public record EatingFood(ServerPlayer player, Item item, long startTick) {}
 
     public static void init(EventRegistrar registrar) {
         Balm.getEvents().onEvent(UseItemEvent.class, DietManager::onPlayerUseItem);
+        registrar.registerOnBeforeServerStarted(e -> CONFIG = ModConfig.getInstance());
         registrar.registerOnPlayerDeath(DietManager::onPlayerDeath);
-        registrar.registerOnPlayerLogout(DietManager::onPlayerLogout);
+        //registrar.registerOnPlayerLogout(DietManager::onPlayerLogout);
         registrar.registerOnServerTick(TickType.ON_20_TICKS, DietManager::on20Ticks);
         registrar.registerOnServerStopped(e -> { EATING_FOODS.clear(); GRANTED_EFFECTS.clear(); DIET_STATS.clear(); });
     }
@@ -63,15 +60,6 @@ public class DietManager {
         EATING_FOODS.put(HBUtil.PlayerUtil.getId(player), new EatingFood(player, stack.getItem(), player.level().getGameTime()));
     }
 
-    @Nullable
-    public static EatingFood getEatingFood(Player player) {
-        return EATING_FOODS.get(HBUtil.PlayerUtil.getId(player));
-    }
-
-    public static boolean isEating(Player player) {
-        return EATING_FOODS.containsKey(HBUtil.PlayerUtil.getId(player));
-    }
-
 
     //** FINISH EATING
     public static void onPlayerFinishEating(Player p, ItemStack stack)
@@ -84,117 +72,107 @@ public class DietManager {
         if (food == null) return;
 
         addRegenBudget(player, item);
+        if(!CONFIG.isEligibleForBonusEffect(stack.getItem())) return;
 
         DietStats stats = getDietStats(player);
-        Map<MobEffect, Integer> granted = getGrantedEffects(player);
-        List<ModConfig.BonusEffect> foodEffects = applyFoodGroupBonuses(player, item, food, granted);
-        boolean applied = !foodEffects.isEmpty();
-        applied |= applySaturationBonus(player, item, food, stats.previousFoodEffects, foodEffects, granted);
+        Map<BonusEffect, MobEffectInstance> foodEffects = applyFoodGroupBonuses(player, item);
+        Map<BonusEffect, MobEffectInstance> allEffects = applySaturationBonus(player, item,
+            stats.previousFoodEffects, foodEffects);
 
-        if (!foodEffects.isEmpty()) stats.previousFoodEffects = new ArrayList<>(foodEffects);
-        if (applied) grantHealthy(player, granted);
+        stats.previousFoodEffects = foodEffects.keySet().stream().toList();
+        grantHealthyBonusEffect(player, allEffects);
+        sendHealthStatusToClient(player, allEffects.values());
     }
 
-    private static List<ModConfig.BonusEffect> applyFoodGroupBonuses(ServerPlayer player, Item item, FoodProperties food, Map<MobEffect, Integer> granted)
+    private static Map<BonusEffect, MobEffectInstance> applyFoodGroupBonuses(ServerPlayer player, Item item)
     {
-        ModConfig config = ModConfig.getInstance();
-        int duration = config.getLingeringDuration(item, config.getBonusEffectDurationTicks(food.getNutrition()));
-        if (duration <= 0) return List.of();
+        List<BonusEffect> bonusEffects = CONFIG.getBonusEffects(item);
+        if (bonusEffects.isEmpty()) return Map.of();
 
-        int levelIncrease = config.getRobustLevelIncrease(item);
-        List<ModConfig.BonusEffect> applied = new ArrayList<>();
-        for (ModConfig.BonusEffect bonus : config.getFoodEffects(item)) {
-            ModConfig.BonusEffect boosted = bonus.withLevelIncrease(levelIncrease);
-            applyBonus(player, boosted, duration, granted);
-            applied.add(boosted);
+        int duration = CONFIG.getDuration(item);
+        if (duration <= 0) return Map.of();
+
+        int levelIncrease = CONFIG.getRobustLevelIncrease(item);
+        Map<BonusEffect, MobEffectInstance> applied = new HashMap<>();
+        for (BonusEffect bonus : bonusEffects) {
+            BonusEffect boosted = bonus.withLevelIncrease(levelIncrease);
+            applied.put(boosted, applyBonus(player, boosted, duration));
         }
         return applied;
     }
 
-    /** Saturation re-grants one random effect from the previous food, preferring one this food did not just grant. */
-    private static boolean applySaturationBonus(ServerPlayer player, Item item, FoodProperties food,
-        List<ModConfig.BonusEffect> previousEffects, List<ModConfig.BonusEffect> foodEffects, Map<MobEffect, Integer> granted)
+    //Saturation re-grants one random effect from the previous food */
+    private static Map<BonusEffect, MobEffectInstance> applySaturationBonus(ServerPlayer player, Item item, List<BonusEffect> previousEffects,
+                                                                            Map<BonusEffect, MobEffectInstance> currentEffects)
     {
-        if (previousEffects.isEmpty()) return false;
-        ModConfig config = ModConfig.getInstance();
-        int duration = config.getLingeringDuration(item, config.getSaturationEffectDurationTicks(ModConfig.getSaturationPoints(food)));
-        if (duration <= 0) return false;
+        if (previousEffects.isEmpty()) return currentEffects;
+        int duration = CONFIG.getDuration(item);
 
-        List<ModConfig.BonusEffect> options = new ArrayList<>();
-        for (ModConfig.BonusEffect previous : previousEffects) {
-            boolean alreadyGranted = foodEffects.stream().anyMatch(e -> e.effect() == previous.effect());
-            if (!alreadyGranted) options.add(previous);
-        }
-        if (options.isEmpty()) options = previousEffects;
+        BonusEffect bonus = previousEffects.stream()
+            .filter(b -> !currentEffects.containsKey(b))
+            .findFirst().orElse(null);
+        if (bonus == null) return currentEffects;
 
-        ModConfig.BonusEffect bonus = options.get(player.getRandom().nextInt(options.size()));
-        applyBonus(player, bonus, duration, granted);
-        return true;
+        Map<BonusEffect, MobEffectInstance> newMap = new HashMap<>(currentEffects);
+        newMap.put(bonus, applyBonus(player, bonus, duration));
+        return newMap;
     }
 
-    private static void applyBonus(ServerPlayer player, ModConfig.BonusEffect bonus, int duration, Map<MobEffect, Integer> granted) {
-        player.addEffect(bonus.create(duration));
-        granted.merge(bonus.effect(), bonus.amplifier(), Math::max);
+    //check if the player has the effect and take the max duration
+    private static MobEffectInstance applyBonus(ServerPlayer player, BonusEffect bonus, int duration) {
+        MobEffectInstance intendToApply = bonus.create(duration);
+        MobEffectInstance active = player.getEffect(bonus.effect);
+        if(active == null ) {
+            player.addEffect(intendToApply);
+            return intendToApply;
+        } else if(active.getAmplifier() <= intendToApply.getAmplifier()) {
+            if(active.getDuration() <= intendToApply.getDuration())
+                player.addEffect(intendToApply);
+            return intendToApply;
+        } else {
+            return intendToApply;
+        }
     }
 
 
     //** HEALTHY EFFECT
 
-    /** Returns the player's granted effects, dropping any that expired or were replaced by a visible effect. */
-    private static Map<MobEffect, Integer> getGrantedEffects(ServerPlayer player) {
-        Map<MobEffect, Integer> granted = GRANTED_EFFECTS.computeIfAbsent(HBUtil.PlayerUtil.getId(player), k -> new LinkedHashMap<>());
-        granted.keySet().removeIf(effect -> {
-            MobEffectInstance active = player.getEffect(effect);
-            return active == null || active.showIcon();
-        });
-        return granted;
-    }
-
     /**
-     * Healthy gains one level per active food effect. Levels are layered so each higher level lasts as long as
-     * the effect that supports it, then vanilla's hidden effect handling drops Healthy back a level.
+     * This mod hides the true mob effects (Swiftness, Strength, etc.) and grants a Single "Healthy" effect instead.
+     * For example, eating one steak grants Strength I and would visually show "Healthy I" with a note telling
+     * the player they have Strength. Eating a meat and bread sandwich (from a mod) would grant Strength I and Swiftness I
+     * and would be denoted as "Healthy II".
+     *
+     * If the player has the minimum level of Healthy, they are granted an additional bonus for being Healthy.
      */
-    private static void grantHealthy(ServerPlayer player, Map<MobEffect, Integer> granted)
+    private static void grantHealthyBonusEffect(ServerPlayer player, Map<BonusEffect, MobEffectInstance> granted)
     {
-        List<Integer> durations = new ArrayList<>();
-        for (MobEffect effect : granted.keySet()) {
-            MobEffectInstance active = player.getEffect(effect);
-            if (active != null && active.getDuration() > 0) durations.add(active.getDuration());
-        }
-        if (durations.isEmpty()) return;
-        durations.sort(Comparator.reverseOrder());
-
-        MobEffect healthy = ModEffects.HEALTHY.get();
-        player.removeEffect(healthy);
-        for (int level = 0; level < durations.size(); level++) {
-            player.addEffect(new MobEffectInstance(healthy, durations.get(level), level, false, false, true));
+        if(granted.isEmpty()) return;
+        int healthyDuration = Integer.MAX_VALUE;
+        int healthyLevel = 0;
+        for (BonusEffect effect : granted.keySet()) {
+            MobEffectInstance instance = granted.get(effect);
+            if(instance.getDuration()<healthyDuration) healthyDuration = instance.getDuration();
+            healthyLevel+= effect.effectLevel;
         }
 
-        ModConfig.BonusEffect healthyBonus = applyHealthyBonus(player, durations);
-        sendGrantedEffects(player, granted, healthyBonus);
+        int minLevel = CONFIG.getMinHealthyEffectLevelForBonusEffect();
+        if(healthyLevel<minLevel) return;
+
+        MobEffect healthyEffect = ModEffects.HEALTHY.get();
+        player.removeEffect(healthyEffect);
+        BonusEffect bonus = CONFIG.getHealthyBonusEffect();
+        MobEffectInstance healthyEffectInstance = bonus.create(healthyDuration, true);
+        player.addEffect(healthyEffectInstance);
+        granted.put(bonus, healthyEffectInstance);
     }
 
-    /** Applies the healthy bonus effect for as long as Healthy stays at or above the minimum level. */
-    @Nullable
-    private static ModConfig.BonusEffect applyHealthyBonus(ServerPlayer player, List<Integer> sortedDurations)
-    {
-        ModConfig config = ModConfig.getInstance();
-        ModConfig.BonusEffect bonus = config.getHealthyBonusEffect();
-        int minLevel = config.getMinHealthyEffectLevelForBonusEffect();
-        if (bonus == null || sortedDurations.size() < minLevel) return null;
-
-        player.addEffect(bonus.create(sortedDurations.get(minLevel - 1)));
-        return bonus;
-    }
-
-    //Payload is [{"id":"minecraft:strength","amp":0}, ...]
-    private static void sendGrantedEffects(ServerPlayer player, Map<MobEffect, Integer> granted, @Nullable ModConfig.BonusEffect healthyBonus)
+    private static void sendHealthStatusToClient(ServerPlayer player, Collection<MobEffectInstance> allEffects)
     {
         JsonArray array = new JsonArray();
-        for (Map.Entry<MobEffect, Integer> entry : granted.entrySet()) {
-            array.add(toJson(entry.getKey(), entry.getValue()));
+        for (MobEffectInstance instance : allEffects) {
+            array.add(toJson(instance.getEffect(), instance.getAmplifier()));
         }
-        if (healthyBonus != null) array.add(toJson(healthyBonus.effect(), healthyBonus.amplifier()));
         SimpleStringMessage.createAndFire(player, HealthyEffectClient.MSG_ID_HEALTHY_EFFECTS, array.toString());
     }
 
@@ -207,24 +185,38 @@ public class DietManager {
 
 
     //** REGEN CAP
-
     private static void addRegenBudget(ServerPlayer player, Item item)
     {
-        ModConfig config = ModConfig.getInstance();
-        if (!config.isFoodRegenCapEnabled()) return;
-        float regen = config.getHealthRegen(item);
+        if(!ModConfig.getInstance().isFoodRegenCapEnabled()) return;
+        float regen = CONFIG.getHealthRegen(item);
         if (regen <= 0f) return;
 
         DietStats stats = getDietStats(player);
         stats.regenBudget = Math.max(stats.regenBudget, regen);
     }
 
-    // Mixin to minecraft regen hook
+    //Cap food regen for players
     public static boolean canRegen(Player player)
     {
         if (!player.isHurt()) return false;
         if (!ModConfig.getInstance().isFoodRegenCapEnabled()) return true;
         return getDietStats(player).regenBudget > 0f;
+    }
+
+    private static final float PASSIVE_EXHAUSTION = 0.01f;
+    public static void handleFoodExhaustion(Player player, DietStats stats)
+    {
+        if (!player.isHurt() || player.getMaxHealth() <= 0f) return;
+        if(player.getFoodData().getFoodLevel()<= 0) return;
+
+        float maxHealth = player.getMaxHealth();
+        float health = player.getHealth();
+
+        float missingPortion = Math.max(0f, maxHealth - health) / maxHealth;
+        float exhaustionMultiplier = CONFIG.getHurtExhaustionMultiplierMax();
+
+        float scaledMultiplier = (exhaustionMultiplier * missingPortion)+1f;
+        player.causeFoodExhaustion( PASSIVE_EXHAUSTION * scaledMultiplier );
     }
 
     //Caps the heal from food regen to the players remaining budget
@@ -246,7 +238,6 @@ public class DietManager {
         return getDietStats(player).regenBudget;
     }
 
-    /** Player instances change on respawn, so the stored reference is refreshed on every lookup. */
     public static DietStats getDietStats(Player player) {
         DietStats stats = DIET_STATS.computeIfAbsent(HBUtil.PlayerUtil.getId(player), k -> new DietStats(player));
         stats.p = player;
@@ -263,10 +254,8 @@ public class DietManager {
 
     //** CLEANUP
 
-    /** Drops players who started eating but cancelled or switched items. */
     private static void on20Ticks(ServerTickEvent event)
     {
-        if (EATING_FOODS.isEmpty()) return;
         Iterator<EatingFood> it = EATING_FOODS.values().iterator();
         while (it.hasNext())
         {
@@ -276,21 +265,20 @@ public class DietManager {
                 it.remove();
             }
         }
-    }
 
-    private static void onPlayerLogout(PlayerLogoutEvent event) {
-        String id = HBUtil.PlayerUtil.getId(event.getPlayer());
-        EATING_FOODS.remove(id);
-        GRANTED_EFFECTS.remove(id);
+        //for all serverPlayers
+        for (ServerPlayer player : HBUtil.PlayerUtil.getAllPlayers()) {
+            DietStats stats = getDietStats(player);
+            handleFoodExhaustion(player, stats);
+        }
+
     }
 
 
     //** Classes
-
-    /** Per player diet state, kept in memory only for the server session. */
     public static class DietStats {
         float regenBudget;
-        List<ModConfig.BonusEffect> previousFoodEffects = new ArrayList<>();
+        List<BonusEffect> previousFoodEffects = new ArrayList<>();
         Player p;
         public DietStats(Player player) {
             this.regenBudget = 0f;

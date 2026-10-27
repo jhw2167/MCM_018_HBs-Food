@@ -1,6 +1,8 @@
 package com.holybuckets.food.config;
 
 import com.holybuckets.food.LoggerProject;
+import com.holybuckets.foundation.GeneralConfig;
+import com.holybuckets.foundation.HBUtil;
 import com.holybuckets.foundation.event.EventRegistrar;
 import net.blay09.mods.balm.api.Balm;
 import net.blay09.mods.balm.api.event.EventPriority;
@@ -8,13 +10,12 @@ import net.blay09.mods.balm.api.event.server.ServerStartingEvent;
 import net.blay09.mods.balm.api.event.server.ServerStoppedEvent;
 import net.minecraft.core.Registry;
 import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.effect.MobEffect;
-import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.food.FoodProperties;
 import net.minecraft.world.item.Item;
-import net.minecraft.world.item.ItemStack;
 
 import javax.annotation.Nullable;
 import java.util.*;
@@ -29,32 +30,36 @@ public class ModConfig {
     private static ModConfig INSTANCE;
 
     public static final int FOOD_GROUP_COUNT = 6;
-    public static final int DEF_EFFECT_AMPLIFIER = 0;
+    public static final int DEF_EFFECT_LEVEL = 1;
     public static final int TICKS_PER_SECOND = 20;
     public static final float DEF_QUICK_FOOD_SPEED = 2.0f;
     public static final float DEF_SLOW_FOOD_SPEED = 0.5f;
     public static final float DEF_LINGERING_FOOD_MULTIPLIER = 2.0f;
     public static final int DEF_ROBUST_FOOD_LEVEL_INCREASE = 1;
+    public static final float DEF_HURT_EXHAUSTION_MULTIPLIER_MAX = 2.0f;
 
     private FoodBenefitsConfig config;
 
-    private final List<Set<Item>> foodGroups = new ArrayList<>();
-    private final List<List<BonusEffect>> foodGroupEffects = new ArrayList<>();
+    private final Map<String, Set<Item>> foodGroups = new HashMap<>();
+    private final Map<String, List<BonusEffect>> foodGroupEffects = new HashMap<>();
     private final List<String> foodGroupNames = new ArrayList<>();
     private final Set<Item> quickFoods = new HashSet<>();
     private final Set<Item> slowFoods = new HashSet<>();
     private final Set<Item> lingeringFoods = new HashSet<>();
     private final Set<Item> robustFoods = new HashSet<>();
+
     private float lingeringFoodBonusMultiplier = DEF_LINGERING_FOOD_MULTIPLIER;
     private int robustFoodEffectLevelIncrease = DEF_ROBUST_FOOD_LEVEL_INCREASE;
     private float quickFoodSpeedBonus = DEF_QUICK_FOOD_SPEED;
     private float slowFoodSpeedBonus = DEF_SLOW_FOOD_SPEED;
+
     private int minFoodPointForBonusEffect;
     private int bonusEffectDurationPerFoodPoint;
     private int bonusEffectDurationPerSaturationPoint;
     private int minHealthyEffectLevelForBonusEffect;
     @Nullable private BonusEffect healthyBonusEffect;
     private boolean enableFoodRegenCap;
+    private float hurtExhaustionMultiplierMax = DEF_HURT_EXHAUSTION_MULTIPLIER_MAX;
     private int minHungerPointsEligibleForHeal;
     private float healthRegenPerHunger;
 
@@ -74,83 +79,37 @@ public class ModConfig {
 
     //** FOOD GROUPS
 
-    /** Groups are numbered 1 to FOOD_GROUP_COUNT to match the config names. */
-    public boolean isFoodInGroup(Item item, int group) {
-        if (item == null || !isValidGroup(group)) return false;
-        return foodGroups.get(group - 1).contains(item);
-    }
 
-    public List<Integer> getFoodGroups(Item item) {
-        List<Integer> groups = new ArrayList<>();
+    public List<String> getFoodGroups(Item item) {
+        List<String> groups = new ArrayList<>();
         if (item == null) return groups;
-        for (int i = 0; i < foodGroups.size(); i++) {
-            if (foodGroups.get(i).contains(item)) groups.add(i + 1);
+        for (String group : foodGroups.keySet()) {
+            if (foodGroups.get(group).contains(item)) groups.add(group);
         }
         return groups;
     }
 
-    public boolean hasFoodGroup(Item item) {
-        if (item == null) return false;
-        for (Set<Item> group : foodGroups) {
-            if (group.contains(item)) return true;
+
+    public List<BonusEffect> getFoodGroupEffects(String group) {
+        if (!foodGroupEffects.containsKey(group)) return Collections.emptyList();
+        return Collections.unmodifiableList(foodGroupEffects.get(group));
+    }
+
+    public List<BonusEffect> getBonusEffects(Item item) {
+        var listBonus = new ArrayList<BonusEffect>();
+        for (String group : getFoodGroups(item)) {
+            listBonus.addAll(foodGroupEffects.get(group));
         }
-        return false;
+        return listBonus;
     }
 
-    public Set<Item> getFoodGroupItems(int group) {
-        if (!isValidGroup(group)) return Collections.emptySet();
-        return Collections.unmodifiableSet(foodGroups.get(group - 1));
-    }
-
-    public String getFoodGroupName(int group) {
-        if (!isValidGroup(group)) return "";
-        return foodGroupNames.get(group - 1);
-    }
-
-    private static boolean isValidGroup(int group) {
-        return group >= 1 && group <= FOOD_GROUP_COUNT;
-    }
-
-
-    //** FOOD EFFECTS
-
-    /** An effect and amplifier from config; duration is decided by the food eaten. */
-    public record BonusEffect(MobEffect effect, int amplifier) {
-
-        /** Hidden from particles and icons; the Healthy effect displays these instead. */
-        public MobEffectInstance create(int durationTicks) {
-            return new MobEffectInstance(effect, durationTicks, amplifier, false, false, false);
-        }
-
-        public BonusEffect withLevelIncrease(int levels) {
-            if (levels <= 0) return this;
-            return new BonusEffect(effect, amplifier + levels);
-        }
-    }
-
-    public List<BonusEffect> getFoodGroupEffects(int group) {
-        if (!isValidGroup(group)) return Collections.emptyList();
-        return Collections.unmodifiableList(foodGroupEffects.get(group - 1));
-    }
-
-    /** Merges effects across every group the food belongs to, keeping the highest amplifier per effect. */
-    public Collection<BonusEffect> getFoodEffects(Item item) {
-        Map<MobEffect, BonusEffect> merged = new LinkedHashMap<>();
-        for (int group : getFoodGroups(item)) {
-            for (BonusEffect bonus : foodGroupEffects.get(group - 1)) {
-                merged.merge(bonus.effect(), bonus, (a, b) -> a.amplifier() >= b.amplifier() ? a : b);
-            }
-        }
-        return merged.values();
+    public boolean isEligibleForBonusEffect(Item foodItem) {
+        if(foodItem.getFoodProperties()==null) return false;
+        return isEligibleForBonusEffect(foodItem.getFoodProperties().getNutrition());
     }
 
     public boolean isEligibleForBonusEffect(int hungerPoints) {
         return hungerPoints >= minFoodPointForBonusEffect;
-    }
-
-    public int getBonusEffectDurationTicks(int hungerPoints) {
-        if (!isEligibleForBonusEffect(hungerPoints)) return 0;
-        return hungerPoints * bonusEffectDurationPerFoodPoint * TICKS_PER_SECOND;
     }
 
     public int getMinHealthyEffectLevelForBonusEffect() {
@@ -167,8 +126,8 @@ public class ModConfig {
         return Math.round(saturationPoints * bonusEffectDurationPerSaturationPoint * TICKS_PER_SECOND);
     }
 
-    /** Vanilla FoodData adds nutrition * saturationModifier * 2 saturation. */
-    public static float getSaturationPoints(FoodProperties food) {
+    // Vanilla Food calc
+    public static float calcSatPoints(FoodProperties food) {
         if (food == null) return 0f;
         return food.getNutrition() * food.getSaturationModifier() * 2.0f;
     }
@@ -182,9 +141,11 @@ public class ModConfig {
     }
 
     // Applies lingering bonus to some foods
-    public int getLingeringDuration(Item item, int durationTicks) {
-        if (!isLingeringFood(item)) return durationTicks;
-        return Math.round(durationTicks * lingeringFoodBonusMultiplier);
+    public int getDuration(Item item) {
+        int foodPoints = item.getFoodProperties().getNutrition();
+        int duration = foodPoints * bonusEffectDurationPerFoodPoint;
+        if (isLingeringFood(item)) duration *= lingeringFoodBonusMultiplier;
+        return duration;
     }
 
     // Extra effect levels a food grants, 0 unless it is a robust food.
@@ -193,11 +154,11 @@ public class ModConfig {
     }
 
     public boolean isQuickFood(Item item) {
-        return item != null && quickFoods.contains(item);
+        return item!=null && quickFoods.contains(item);
     }
 
     public boolean isSlowFood(Item item) {
-        return item != null && slowFoods.contains(item);
+        return item!=null && slowFoods.contains(item);
     }
 
     // Multiplier applied to eating speed, 1 when the food has no speed modifier.
@@ -220,6 +181,10 @@ public class ModConfig {
         return enableFoodRegenCap;
     }
 
+    public float getHurtExhaustionMultiplierMax() {
+        return hurtExhaustionMultiplierMax;
+    }
+
     public boolean isEligibleForHeal(int hungerPoints) {
         return hungerPoints >= minHungerPointsEligibleForHeal;
     }
@@ -236,23 +201,11 @@ public class ModConfig {
         return getHealthRegen(food.getNutrition());
     }
 
-    public float getHealthRegen(ItemStack stack) {
-        if (stack == null || stack.isEmpty()) return 0f;
-        return getHealthRegen(stack.getItem());
-    }
-
-    public FoodBenefitsConfig getConfig() {
-        return config;
-    }
-
-
     //** LOADING
 
-    private void onBeforeServerStarted(RegistryAccess registryAccess)
+    private void onBeforeServerStarted()
     {
         this.config = Balm.getConfig().getActiveConfig(FoodBenefitsConfig.class);
-        Registry<Item> itemRegistry = registryAccess.registryOrThrow(Registries.ITEM);
-        Registry<MobEffect> effectRegistry = registryAccess.registryOrThrow(Registries.MOB_EFFECT);
 
         FoodBenefitsConfig.FoodGroups groupsConfig = config.foodGroups;
         FoodBenefitsConfig.FoodEffects effectsConfig = config.foodEffects;
@@ -268,16 +221,18 @@ public class ModConfig {
         foodGroups.clear();
         foodGroupEffects.clear();
         foodGroupNames.clear();
-        for (int i = 0; i < FOOD_GROUP_COUNT; i++)
+        int size = config.foodGroups.foodGroupNames.size();
+        for (int i = 0; i < size; i++)
         {
-            foodGroups.add(parseFoods(itemRegistry, groupIds.get(i), "foodGroup" + (i + 1)));
-            foodGroupEffects.add(parseEffects(effectRegistry, effectIds.get(i), "foodGroup" + (i + 1) + "Effects"));
+            String name = config.foodGroups.foodGroupNames.get(i);
+
+            foodGroups.put(name, parseFoods(groupIds.get(i), name));
+            foodGroupEffects.put(name, parseEffects(effectIds.get(i)));
             foodGroupNames.add(parseGroupName(groupsConfig.foodGroupNames, i));
         }
 
-        String healthyBonusId = effectsConfig.minHealthyBonusEffect;
-        List<BonusEffect> healthyBonus = (healthyBonusId == null || healthyBonusId.isBlank()) ? List.of()
-            : parseEffects(effectRegistry, List.of(healthyBonusId), "minHealthyBonusEffect");
+        Set<String> healthyBonusId = effectsConfig.healthyBonusPotionEffects;
+        List<BonusEffect> healthyBonus = parseEffects(List.copyOf(healthyBonusId));
         healthyBonusEffect = healthyBonus.isEmpty() ? null : healthyBonus.get(0);
         minHealthyEffectLevelForBonusEffect = Math.max(1, effectsConfig.minHealthyEffectLevelForBonusEffect);
 
@@ -286,21 +241,19 @@ public class ModConfig {
         bonusEffectDurationPerSaturationPoint = Math.max(0, config.foodSaturationInteraction.bonusEffectDurationPerSaturationPoint);
 
         quickFoods.clear();
-        quickFoods.addAll(parseFoods(itemRegistry, effectsConfig.quickFoods, "quickFoods"));
+        quickFoods.addAll(parseFoods(effectsConfig.quickFoods, "quickFoods"));
         slowFoods.clear();
-        slowFoods.addAll(parseFoods(itemRegistry, effectsConfig.slowFoods, "slowFoods"));
+        slowFoods.addAll(parseFoods(effectsConfig.slowFoods, "slowFoods"));
 
         quickFoodSpeedBonus = effectsConfig.quickFoodSpeedBonus;
         if (quickFoodSpeedBonus <= 1.0f) {
-            LoggerProject.logWarning(CLASS_ID + "003", "quickFoodSpeedBonus must be greater than 1, found "
-                + quickFoodSpeedBonus + "; applying default " + DEF_QUICK_FOOD_SPEED);
             quickFoodSpeedBonus = DEF_QUICK_FOOD_SPEED;
         }
 
         lingeringFoods.clear();
-        lingeringFoods.addAll(parseFoods(itemRegistry, effectsConfig.lingeringFoods, "lingeringFoods"));
+        lingeringFoods.addAll(parseFoods(effectsConfig.lingeringFoods, "lingeringFoods"));
         robustFoods.clear();
-        robustFoods.addAll(parseFoods(itemRegistry, effectsConfig.robustFoods, "robustFoods"));
+        robustFoods.addAll(parseFoods(effectsConfig.robustFoods, "robustFoods"));
 
         lingeringFoodBonusMultiplier = effectsConfig.lingeringFoodBonusMultiplier;
         if (lingeringFoodBonusMultiplier <= 1.0f) {
@@ -324,25 +277,26 @@ public class ModConfig {
         }
 
         enableFoodRegenCap = config.foodHealthInteractions.enableFoodRegenCap;
+        hurtExhaustionMultiplierMax = config.foodHealthInteractions.hurtExhaustionMultiplierMax;
+        if (hurtExhaustionMultiplierMax < 1.0f) {
+            LoggerProject.logWarning(CLASS_ID + "011", "hurtExhaustionMultiplierMax must be at least 1, found "
+                + hurtExhaustionMultiplierMax + "; applying default " + DEF_HURT_EXHAUSTION_MULTIPLIER_MAX);
+            hurtExhaustionMultiplierMax = DEF_HURT_EXHAUSTION_MULTIPLIER_MAX;
+        }
         minHungerPointsEligibleForHeal = Math.max(0, config.foodHealthInteractions.minHungerPointsEligibleForHeal);
         healthRegenPerHunger = Math.max(0f, config.foodHealthInteractions.healthRegenPerHunger);
 
-        LoggerProject.logInfo(CLASS_ID + "001", "Loaded food groups with sizes " + foodGroups.stream().map(Set::size).toList()
+        LoggerProject.logInfo(CLASS_ID + "001", "Loaded food groups with sizes " + foodGroups.size()
             + ", " + quickFoods.size() + " quick food(s), " + slowFoods.size() + " slow food(s), "
             + lingeringFoods.size() + " lingering food(s), " + robustFoods.size() + " robust food(s)");
     }
 
-    private static Set<Item> parseFoods(Registry<Item> registry, Collection<String> ids, String configName)
+    private static Set<Item> parseFoods(Collection<String> ids, String configName)
     {
         Set<Item> foods = new HashSet<>();
-        for (String id : ids)
-        {
-            Item item = getItem(registry, id);
-            if (item == null) {
-                LoggerProject.logWarning(CLASS_ID + "005", configName + ": could not find item for id '" + id + "'");
-                continue;
-            }
-            if (item.getFoodProperties() == null) {
+        for (String id : ids) {
+            Item item = HBUtil.ItemUtil.itemNameToItem(id);
+            if (item==null || item.getFoodProperties()==null) {
                 LoggerProject.logWarning(CLASS_ID + "006", configName + ": item '" + id + "' is not a food, skipping");
                 continue;
             }
@@ -351,29 +305,25 @@ public class ModConfig {
         return foods;
     }
 
-    /** Parses entries of the form effect_id[,amplifier]. */
-    private static List<BonusEffect> parseEffects(Registry<MobEffect> registry, Collection<String> entries, String configName)
+    private static List<BonusEffect> parseEffects(Collection<String> entries)
     {
         List<BonusEffect> effects = new ArrayList<>();
         for (String entry : entries)
         {
             String[] parts = entry.split(",");
             ResourceLocation loc = ResourceLocation.tryParse(parts[0].trim());
-            MobEffect effect = (loc == null) ? null : registry.getOptional(loc).orElse(null);
-            if (effect == null) {
-                LoggerProject.logWarning(CLASS_ID + "007", configName + ": could not find effect for '" + entry + "'");
-                continue;
-            }
+            MobEffect effect = HBUtil.EffectUtil.mobEffectNameToEffect(loc);
+            if (effect == null) continue;
 
-            int amplifier = DEF_EFFECT_AMPLIFIER;
+            int effectLevel = DEF_EFFECT_LEVEL;
             try {
-                if (parts.length > 1) amplifier = Integer.parseInt(parts[1].trim());
+                if (parts.length > 1) effectLevel = Integer.parseInt(parts[1].trim());
             } catch (NumberFormatException e) {
-                LoggerProject.logWarning(CLASS_ID + "008", configName + ": invalid amplifier in '"
+                LoggerProject.logWarning(CLASS_ID + "008", "invalid effect level in '"
                     + entry + "'; applying default");
             }
 
-            effects.add(new BonusEffect(effect, Math.max(0, amplifier)));
+            effects.add(new BonusEffect(effect, Math.max(DEF_EFFECT_LEVEL, effectLevel)));
         }
         return effects;
     }
@@ -398,8 +348,13 @@ public class ModConfig {
     }
 
 
+    public static void onConnectedToServer() {
+        if (GeneralConfig.getInstance().isIntegrated()) return;
+        getInstance().onBeforeServerStarted();
+    }
+
     private static void onBeforeServerStarted(ServerStartingEvent event) {
-        getInstance().onBeforeServerStarted(event.getServer().registryAccess());
+        getInstance().onBeforeServerStarted();
     }
 
     private static void onServerStopped(ServerStoppedEvent event) {

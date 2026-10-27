@@ -95,17 +95,18 @@ public class FoodBenefitsConfig {
         @Comment("Potion effects applied when eating a food from group 6. Format: effect_id[,amplifier]")
         public Set<String> foodGroup6Effects = new HashSet<>();
 
-        @Comment("Minimum hunger points a food must replenish to apply its food group bonus effects")
+        @Comment("Minimum hunger points a food must replenish to yield bonus effects")
         public int minFoodPointForBonusEffect = 1;
 
         @Comment("Seconds of bonus effect duration granted for each hunger point the food replenishes")
-        public int bonusEffectDurationPerFoodPoint = 5;
+        public int bonusEffectDurationPerFoodPoint = 10;
 
-        @Comment("Each active food bonus effect adds one level of Healthy. At this Healthy level or above, minHealthyBonusEffect is also applied")
+        @Comment("Each active food bonus effect adds one level of Healthy. At this Healthy level or above, healthyBonusPotionEffects is also applied")
         public int minHealthyEffectLevelForBonusEffect = 3;
 
-        @Comment("Effect applied while Healthy is at or above minHealthyEffectLevelForBonusEffect. Format: effect_id[,amplifier]")
-        public String minHealthyBonusEffect = "minecraft:resistance";
+        @NestedType(String.class)
+        @Comment("Effects are applied while the 'Healthy' status effect  is at or above minHealthyEffectLevelForBonusEffect")
+        public Set<String> healthyBonusPotionEffects = new HashSet<>(Set.of("minecraft:resistance"));
 
         @NestedType(String.class)
         @Comment("Food items which are eaten faster than normal")
@@ -167,6 +168,9 @@ public class FoodBenefitsConfig {
 
         @Comment("Health points (half hearts) rewarded for each point of hunger at or above the minimum threshold")
         public float healthRegenPerHunger = 1.0f;
+
+        @Comment("Hunger exhaustion multiplier reached near zero health, scaling linearly from 1 at full health. Must be at least 1")
+        public float hurtExhaustionMultiplierMax = 2.0f;
     }
 
     public static class FoodSaturationInteraction {

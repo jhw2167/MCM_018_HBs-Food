@@ -1,4 +1,9 @@
 {
   "effect.hbs_food.healthy": "Healthy",
-  "effect.hbs_food.healthy.desc": "A balanced diet grants you:"
+  "effect.hbs_food.healthy.desc": "Healthy Bonuses:",
+  "tooltip.hbs_food.tag.robust": "Robust",
+  "tooltip.hbs_food.tag.lingering": "Lingering",
+  "tooltip.hbs_food.tag.healthful": "Hearty",
+  "tooltip.hbs_food.tag.quick": "Quick",
+  "tooltip.hbs_food.tag.slow": "Slow"
 }

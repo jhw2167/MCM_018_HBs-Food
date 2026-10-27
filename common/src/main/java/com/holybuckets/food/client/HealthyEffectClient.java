@@ -4,6 +4,8 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.holybuckets.food.LoggerProject;
+import com.holybuckets.food.config.ModConfig;
+import com.holybuckets.food.effect.ModEffects;
 import com.holybuckets.foundation.client.ClientEventRegistrar;
 import com.holybuckets.foundation.event.custom.SimpleMessageEvent;
 import net.minecraft.ChatFormatting;
@@ -12,6 +14,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.effect.MobEffect;
+import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.player.Player;
 
 import java.util.ArrayList;
@@ -54,6 +57,15 @@ public class HealthyEffectClient {
 
         GRANTED.clear();
         GRANTED.addAll(parsed);
+    }
+
+    /** True when this is a Healthy effect at or above the level that grants the healthy bonus effect. */
+    public static boolean isHealthyBonusLevel(MobEffectInstance instance)
+    {
+        if (instance == null || instance.getEffect() != ModEffects.HEALTHY.get()) return false;
+        ModConfig config = ModConfig.getInstance();
+        int minLevel = config.getMinHealthyEffectLevelForBonusEffect();
+        return minLevel > 0 && config.getHealthyBonusEffect() != null && instance.getAmplifier() + 1 >= minLevel;
     }
 
     public static List<GrantedEffect> getGrantedEffects() {
