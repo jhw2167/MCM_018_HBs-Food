@@ -25,7 +25,7 @@ receive the additional "Healthy" bonus effect, by default it is resistance
 
 ## Changes to Vanilla Systems
 
-- Rapid healing from food when hurt is disabled. More of your healing will come from health potions or sleeping
+- Rapid healing from food when hurt is disabled. More of your healing will come from Healing Potions or sleeping
 - Hunger drains faster while you are hurt
 - Beds now restore health after a good nights sleep
-- Adds a new health potion recipe for early game aces
+- Adds a new health potion recipe for early game access

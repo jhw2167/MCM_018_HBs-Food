@@ -5,6 +5,7 @@ import com.holybuckets.foundation.event.EventRegistrar;
 import com.holybuckets.food.config.FoodBenefitsConfig;
 import com.holybuckets.food.config.ModConfig;
 import com.holybuckets.food.core.DietManager;
+import com.holybuckets.food.core.HealingAlchemy;
 import net.blay09.mods.balm.api.Balm;
 import net.blay09.mods.balm.api.event.EventPriority;
 import net.blay09.mods.balm.api.event.server.ServerStartingEvent;
@@ -41,6 +42,7 @@ public class FoodWithBenefitsMain {
         EventRegistrar registrar = EventRegistrar.getInstance();
         ModConfig.init(registrar);
         DietManager.init(registrar);
+        HealingAlchemy.init(registrar);
 
 
         //register local events

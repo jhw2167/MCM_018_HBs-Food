@@ -1,0 +1,22 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    {
+      "item": "hbs_foundation:enchanted_essence"
+    },
+    {
+      "tag": "hbs_food:food"
+    },
+    {
+      "tag": "hbs_food:food"
+    },
+    {
+      "tag": "hbs_food:food"
+    }
+  ],
+  "result": {
+    "item": "hbs_food:healing_powder",
+    "count": 1
+  }
+}

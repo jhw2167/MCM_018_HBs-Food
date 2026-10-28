@@ -4,6 +4,7 @@ import com.holybuckets.foundation.event.BalmEventRegister;
 import com.holybuckets.food.block.ModBlocks;
 import com.holybuckets.food.config.FoodBenefitsConfig;
 import com.holybuckets.food.effect.ModEffects;
+import com.holybuckets.food.enchantment.ModEnchantments;
 import com.holybuckets.food.block.be.ModBlockEntities;
 import com.holybuckets.food.item.ModItems;
 import com.holybuckets.food.menu.ModMenus;
@@ -41,6 +42,7 @@ public class CommonClass {
         ModItems.initialize(Balm.getItems());
         ModMenus.initialize(Balm.getMenus());
         ModEffects.register();
+        ModEnchantments.register();
         
         isInitialized = true;
     }

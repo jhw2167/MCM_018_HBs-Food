@@ -1,6 +1,7 @@
 package com.holybuckets.food.config;
 
 import com.holybuckets.food.LoggerProject;
+import com.holybuckets.food.enchantment.PotencyEnchantment;
 import com.holybuckets.foundation.GeneralConfig;
 import com.holybuckets.foundation.HBUtil;
 import com.holybuckets.foundation.event.EventRegistrar;
@@ -47,6 +48,8 @@ public class ModConfig {
     private final Set<Item> slowFoods = new HashSet<>();
     private final Set<Item> lingeringFoods = new HashSet<>();
     private final Set<Item> robustFoods = new HashSet<>();
+    private int hungerPointsPerHealthPoint = 4;
+    private int maxHealingPotency = PotencyEnchantment.MAX_LEVEL;
 
     private float lingeringFoodBonusMultiplier = DEF_LINGERING_FOOD_MULTIPLIER;
     private int robustFoodEffectLevelIncrease = DEF_ROBUST_FOOD_LEVEL_INCREASE;
@@ -130,6 +133,14 @@ public class ModConfig {
     public static float calcSatPoints(FoodProperties food) {
         if (food == null) return 0f;
         return food.getNutrition() * food.getSaturationModifier() * 2.0f;
+    }
+
+    public int getHungerPointsPerHealthPoint() {
+        return hungerPointsPerHealthPoint;
+    }
+
+    public int getMaxHealingPotency() {
+        return maxHealingPotency;
     }
 
     public boolean isLingeringFood(Item item) {
@@ -249,6 +260,10 @@ public class ModConfig {
         if (quickFoodSpeedBonus <= 1.0f) {
             quickFoodSpeedBonus = DEF_QUICK_FOOD_SPEED;
         }
+
+        FoodBenefitsConfig.HealingPowderConfig powderConfig = config.healingPowder;
+        hungerPointsPerHealthPoint = Math.max(1, powderConfig.hungerPointsPerHealthPoint);
+        maxHealingPotency = Math.max(1, Math.min(powderConfig.maxHealingPotency, PotencyEnchantment.MAX_LEVEL));
 
         lingeringFoods.clear();
         lingeringFoods.addAll(parseFoods(effectsConfig.lingeringFoods, "lingeringFoods"));

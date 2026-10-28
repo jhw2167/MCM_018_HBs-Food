@@ -13,8 +13,12 @@ import net.minecraft.world.item.ItemStack;
 public class ModItems {
     public static DeferredObject<CreativeModeTab> creativeModeTab;
     public static Item emptyBlockItem;
+    public static DeferredObject<Item> healingPowder;
+    public static DeferredObject<Item> healingPotion;
 
     public static void initialize(BalmItems items) {
+        healingPowder = items.registerItem(rl -> new HealingPowderItem(items.itemProperties()), id("healing_powder"), id(Constants.MOD_ID));
+        healingPotion = items.registerItem(rl -> new HealingPotionItem(items.itemProperties().stacksTo(1)), id("healing_potion"), id(Constants.MOD_ID));
         //items.registerItem(() -> emptyBlockItem = new EmptyBlockItem(items.itemProperties()), id("empty_block"));
         creativeModeTab = items.registerCreativeModeTab(id(Constants.MOD_ID), () -> new ItemStack(ModBlocks.templateBlock));
     }

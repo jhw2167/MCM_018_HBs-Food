@@ -5,5 +5,20 @@
   "tooltip.hbs_food.tag.lingering": "Lingering",
   "tooltip.hbs_food.tag.healthful": "Hearty",
   "tooltip.hbs_food.tag.quick": "Quick",
-  "tooltip.hbs_food.tag.slow": "Slow"
+  "tooltip.hbs_food.tag.slow": "Slow",
+  "item.hbs_food.healing_powder": "Healing Powder",
+  "item.hbs_food.healing_powder.desc": "Brew with an Awkward Potion",
+  "item.hbs_food.healing_potion": "Healing Potion",
+  "item.hbs_food.healing_potion.desc": "Restores %s health",
+  "enchantment.hbs_food.potency": "Potency",
+  "enchantment.level.11": "XI",
+  "enchantment.level.12": "XII",
+  "enchantment.level.13": "XIII",
+  "enchantment.level.14": "XIV",
+  "enchantment.level.15": "XV",
+  "enchantment.level.16": "XVI",
+  "enchantment.level.17": "XVII",
+  "enchantment.level.18": "XVIII",
+  "enchantment.level.19": "XIX",
+  "enchantment.level.20": "XX"
 }

@@ -178,8 +178,18 @@ public class FoodBenefitsConfig {
         public int bonusEffectDurationPerSaturationPoint = 5;
     }
 
+    public static class HealingPowderConfig {
+
+        @Comment("Hunger points of food needed for each health point (half heart) of Potency on Healing Powder; fractions round randomly")
+        public int hungerPointsPerHealthPoint = 4;
+
+        @Comment("Highest Potency a Healing Powder can reach, at most 20")
+        public int maxHealingPotency = 20;
+    }
+
     public FoodGroups foodGroups = new FoodGroups();
     public FoodEffects foodEffects = new FoodEffects();
     public FoodHealthInteractions foodHealthInteractions = new FoodHealthInteractions();
     public FoodSaturationInteraction foodSaturationInteraction = new FoodSaturationInteraction();
+    public HealingPowderConfig healingPowder = new HealingPowderConfig();
 }
